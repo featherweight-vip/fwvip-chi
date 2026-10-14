@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# The back-to-back UVM bench (plan V.08): the VIP's RN agent -> the kit's RN
+# adapter <-> the kit's test Home <-> the kit's SN adapter -> the VIP's SN
+# agent, with the VIP's monitor agent on both links. env/ (the bench's fw-hdl
+# tree and UVM env), tests/ (the cases), tb/ (HDL and HVL tops, per view).
+#
+#   dfm run tests                                # every case, both views
+#   dfm run tests --tests l2_retry_storm         # one case, both views
+#   dfm run smoke
+fragment:
+  name: bench
+
+  tasks:
+  - name: uvm-env
+    uses: project.dv.uvm.utils.env-base
+    needs:
+    - vip-uvm-hvlsrc
+    - org.fwvip.core.core-uvm-pkg
+    - org.fwvip.core.clock-reset-xtor
+    # The kit's transactors, bridges and pin checkers, for the xtor view.
+    - fw.proto.chi.xtor-class
+    - fw.proto.chi.checker
+    - "flags-comp-${{ build }}"
+    with:
+      # Dependency order: the UVM env builds on the bench's tree.
+      env_include: [fwvip_chi_b2b_bench_pkg.sv, fwvip_chi_b2b_env_pkg.sv]
+
+  - name: img-tlm
+    uses: project.dv.uvm.utils.tb-img
+    needs: [uvm-env, flags-img]
+    with:
+      tb_include: [fwvip_chi_hdl_top_tlm.sv, fwvip_chi_hvl_top_tlm.sv]
+      top: [fwvip_chi_hvl_top_tlm]
+
+  - name: img-xtor
+    uses: project.dv.uvm.utils.tb-img
+    needs: [uvm-env, flags-img]
+    with:
+      tb_include: [fwvip_chi_rn_link.sv, fwvip_chi_sn_link.sv, fwvip_chi_hdl_top_xtor.sv, fwvip_chi_hvl_top_xtor.sv]
+      top: [fwvip_chi_hvl_top_xtor]
+
+  # The L1 bench (plan V.03): an L1 agent at each end of both links.
+  - name: img-l1-tlm
+    uses: project.dv.uvm.utils.tb-img
+    needs: [uvm-env, flags-img]
+    with:
+      tb_include: [fwvip_chi_hdl_top_tlm.sv, fwvip_chi_hvl_top_l1_tlm.sv]
+      top: [fwvip_chi_hvl_top_l1_tlm]
+
+  - name: img-l1-xtor
+    uses: project.dv.uvm.utils.tb-img
+    needs: [uvm-env, flags-img]
+    with:
+      tb_include: [fwvip_chi_rn_link.sv, fwvip_chi_sn_link.sv, fwvip_chi_hdl_top_xtor.sv, fwvip_chi_hvl_top_l1_xtor.sv]
+      top: [fwvip_chi_hvl_top_l1_xtor]
+
+  # One cell per (case, view). `name` is what `--tests` selects; the view,
+  # what `--views` selects, is the `image` axis (as hdlsim's suite report
+  # names it). `bench` picks the bench: "" the L2 back-to-back bench, "l1-"
+  # the L1 bench. The l2_* cases are the kit's l2_rn_sn suite on the VIP's
+  # agents (fw_mem_if_access, the kit's L3, is not the VIP's).
+  - name: uvm-tests
+    strategy:
+      matrix:
+        case:
+        - { name: smoke,                seq: fwvip_chi_l2_write_read_seq,        test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_partial_writes,    seq: fwvip_chi_l2_partial_writes_seq,    test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_read_every_size,   seq: fwvip_chi_l2_read_every_size_seq,   test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_ordered_reads,     seq: fwvip_chi_l2_ordered_reads_seq,     test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_ordered_writes,    seq: fwvip_chi_l2_ordered_writes_seq,    test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_concurrent,        seq: fwvip_chi_l2_concurrent_seq,        test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_retry_storm,       seq: fwvip_chi_l2_retry_storm_seq,       test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_flow_shapes,       seq: fwvip_chi_l2_flow_shapes_seq,       test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_dwt_writes,        seq: fwvip_chi_l2_dwt_writes_seq,        test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_write_comp_ack,    seq: fwvip_chi_l2_write_comp_ack_seq,    test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_write_data_cancel, seq: fwvip_chi_l2_write_data_cancel_seq, test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_errors_from_sn,    seq: fwvip_chi_l2_errors_sn_seq,         test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_errors_from_home,  seq: fwvip_chi_l2_errors_home_seq,       test: fwvip_chi_b2b_test, bench: "" }
+        - { name: l2_poison,            seq: fwvip_chi_l2_poison_seq,            test: fwvip_chi_b2b_test, bench: "" }
+        - { name: rand_traffic,         seq: fwvip_chi_rand_traffic_seq,         test: fwvip_chi_b2b_test, bench: "" }
+        - { name: mon_teeth,            seq: fwvip_chi_l2_write_read_seq,        test: fwvip_chi_mon_teeth_test, bench: "" }
+        - { name: l1_b2b,               seq: "",                                 test: fwvip_chi_l1_test,        bench: "l1-" }
+        - { name: l1_stall,             seq: "",                                 test: fwvip_chi_l1_stall_test,  bench: "l1-" }
+        image: [tlm, xtor]
+    body:
+    - name: "${{ this.case.name }}-${{ this.image }}"
+      uses: hdlsim.vlt.SimUVMCase
+      needs:
+      - "img-${{ this.case.bench }}${{ this.image }}"
+      - "flags-run-${{ build }}"
+      with:
+        name: "${{ this.case.name }}-${{ this.image }}"
+        testname: "${{ this.case.test }}"
+        plusargs: ["SEQ=${{ this.case.seq }}"]

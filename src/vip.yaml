@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# The VIP's sources. Two exports, as every fwvip-<proto>:
+#   xtor-pkg       fwvip_chi_xtor_pkg: the kit's max widths and link
+#                  parameter presets, under the names the VIP uses
+#   vip-uvm-hvlsrc fwvip_chi_pkg: the UVM agents, items and sequences
+# The VIP builds no transactors, bridges, L2 classes or checkers: those are
+# the kit's (fw.proto.chi.*), and a bench brings the ones it uses.
+fragment:
+  tasks:
+  - export: xtor-pkg
+    uses: std.FileSet
+    needs: [fw.proto.chi.types]
+    with:
+      type: systemVerilogSource
+      base: uvm
+      incdirs: ["."]
+      include: [fwvip_chi_xtor_pkg.sv]
+
+  # The UVM layer. Needs the kit's class layer (chi_xact_if, the L2 types,
+  # chi_mon_if, chi_flow_check) and fwvip-core's clock provider (the SN
+  # agent counts responder latency on it).
+  # Only the package unit is listed; its .svh files come in via the incdir.
+  - export: vip-uvm-hvlsrc
+    uses: std.FileSet
+    needs:
+    - xtor-pkg
+    - fw.proto.chi.class
+    - org.fwvip.core.core-uvm-pkg
+    with:
+      type: systemVerilogSource
+      base: uvm
+      incdirs: ["."]
+      include: [fwvip_chi_pkg.sv]
